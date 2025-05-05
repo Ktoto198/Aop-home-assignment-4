@@ -25,12 +25,12 @@ public class MealProcessing
     public MealProcessing()
     {
     }
-    public async Task Run(Recipe recipe)
+    public async Task Run(Recipe recipe, RecipeProgress recipeProgress)
     {
         if (recipe == null) Console.WriteLine("Recipe is null.");
 
         Console.WriteLine($"Starting meal processing for {recipe.Name}...");
-        await ProcessMealsAsync(recipe);
+        await ProcessMealsAsync(recipe, recipeProgress);
     }
 
     private async Task StartProcessing(Recipe recipe)
@@ -47,14 +47,14 @@ public class MealProcessing
         }
     }
 
-    private async Task ProcessMealsAsync(Recipe recipe)
+    private async Task ProcessMealsAsync(Recipe recipe, RecipeProgress recipeProgress )
     {
         await StartProcessing(recipe);
 
         try
         {
             Console.WriteLine("Processing meals...");
-            await ProcessStepsAsync(recipe);
+            await ProcessStepsAsync(recipe, recipeProgress);
         }
         catch (Exception ex)
         {
@@ -62,7 +62,7 @@ public class MealProcessing
         }
     }
 
-    private async Task ProcessStepsAsync(Recipe recipe)
+    private async Task ProcessStepsAsync(Recipe recipe, RecipeProgress recipeProgress)
     {
         if (recipe?.Steps == null || recipe.Steps.Count == 0)
         {
@@ -71,11 +71,12 @@ public class MealProcessing
         }
 
         Console.WriteLine($"Processing {recipe.Name} with {recipe.Steps.Count} steps.");
-        var recipeProgress = new RecipeProgress()
-        {
-            Status = "In Progress",
-            CurrentStep = recipe.Steps[0].Description,
-        };
+        
+        await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                recipeProgress.Status = "In Progress";
+                recipeProgress.CurrentStep = recipe.Steps[0].Description;
+            });
 
          // Add the initial progress to the list of ongoing recipes
         await Dispatcher.UIThread.InvokeAsync(() =>

@@ -17,11 +17,12 @@ public class KitchenStation
         Recipe = recipe;
     }
 
-    public async Task ProcessMealsAsync(Recipe recipe)
+    public async Task ProcessMealsAsync(Recipe recipe,  RecipeProgress recipeProgress)
     {
         Console.WriteLine($"Processing meals at {Name} station...");
+        
         // Use the asynchronous method to process meals concurrently
-        await mealProcessing.Run(recipe);
+        await mealProcessing.Run(recipe, recipeProgress);
     }
 }
 

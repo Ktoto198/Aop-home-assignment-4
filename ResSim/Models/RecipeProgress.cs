@@ -7,16 +7,16 @@ namespace ResSim.Models
     {
         // Observable properties automatically generate the backing fields
         [ObservableProperty]
-        private string recipeName;
+        public string recipeName;
 
         [ObservableProperty]
-        private double progress;
+        public double progress;
 
         [ObservableProperty]
-        private string status;
+        public string status;
 
         [ObservableProperty]
-        private string currentStep;
+        public string currentStep;
 
         public RecipeProgress()
         {

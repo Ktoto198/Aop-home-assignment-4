@@ -24,6 +24,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private ObservableCollection<RecipeProgress> recipesInProgress;
+
+    [ObservableProperty]
+    private double _progress = new RecipeProgress().Progress; // Example arguments: 0 completed steps out of 1 total step
     private Window? mainWindow;
 
 
@@ -72,10 +75,9 @@ public partial class MainWindowViewModel : ViewModelBase
                         RecipesInProgress.Add(recipeProgress);
                     });
 
-                    // Process the recipe
                     var kitchenStation = new KitchenStation(stationName, recipe);
-                    await kitchenStation.ProcessMealsAsync(recipe);
 
+                    await kitchenStation.ProcessMealsAsync(recipe, recipeProgress);
                     // Update the recipe progress after processing
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {

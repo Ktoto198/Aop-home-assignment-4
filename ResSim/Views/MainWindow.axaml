@@ -1,33 +1,57 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="clr-namespace:ResSim.ViewModels"
-        xmlns:local="clr-namespace:ResSim.Models"
-        x:Class="ResSim.Views.MainWindow"
-        mc:Ignorable="d"
-        Title="Meal Processing"
-        Width="500" Height="400"
-        x:DataType="vm:MainWindowViewModel">
+<Window
+    x:Class="ResSim.Views.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:ResSim.Models"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="clr-namespace:ResSim.ViewModels"
+    Title="Meal Processing"
+    Width="700"
+    Height="600"
+    x:DataType="vm:MainWindowViewModel"
+    mc:Ignorable="d">
 
-    <!-- Set DataContext for ViewModel -->
+    <!--  Set DataContext for ViewModel  -->
     <!-- <Window.DataContext>
         <vm:MainWindowViewModel />
-    </Window.DataContext> -->
+    </Window.DataContext>-->
 
     <StackPanel Margin="10">
-        <TextBlock Text="Meal Progress" FontSize="20" Margin="0 0 0 10"/>
-        
+        <TextBlock
+            Margin="0,0,0,10"
+            FontSize="20"
+            Text="Meal Progress" />
+
         <ListBox ItemsSource="{Binding RecipesInProgress}">
-            <!-- DataTemplate with x:DataType specified -->
+            <!--  DataTemplate with x:DataType specified  -->
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="local:RecipeProgress">
-                    <StackPanel Orientation="Horizontal" Margin="5">
-                        <TextBlock Text="{Binding RecipeName}" Width="150" TextWrapping="Wrap"/>
-                        <ProgressBar Width="200" Height="20" Minimum="0" Maximum="100"
-                                     Value="{Binding Progress}" ShowProgressText="True"/>
-                        <TextBlock Text="{Binding Status}" Width="100"/>
-                    </StackPanel>
+                    <Grid
+                        Margin="5"
+                        VerticalAlignment="Center"
+                        ColumnDefinitions="2*,4*,2*">
+                        <TextBlock
+                            Grid.Column="0"
+                            Text="{Binding RecipeName}"
+                            TextWrapping="Wrap" />
+
+                        <ProgressBar
+                            Grid.Column="1"
+                            Height="20"
+                            Margin="5,0"
+                            VerticalAlignment="Center"
+                            Maximum="100"
+                            Minimum="0"
+                            Value="{Binding Progress}"
+                            ShowProgressText="True"
+                             />
+
+                        <TextBlock
+                            Grid.Column="2"
+                            HorizontalAlignment="Right"
+                            Text="{Binding Status}" />
+                    </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
