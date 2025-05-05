@@ -5,8 +5,8 @@ using Avalonia.Data.Core.Plugins;
 using System.Linq;
 using Avalonia.Markup.Xaml;
 using ResSim.ViewModels;
-using ResSim.Views;
 
+using ResSim.Views;
 namespace ResSim;
 
 public partial class App : Application
@@ -25,7 +25,7 @@ public partial class App : Application
             DisableAvaloniaDataAnnotationValidation();
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(),
+                DataContext = new MainWindowViewModel(desktop.MainWindow),
             };
         }
 

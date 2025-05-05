@@ -1,20 +1,35 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:ResSim.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        xmlns:vm="clr-namespace:ResSim.ViewModels"
+        xmlns:local="clr-namespace:ResSim.Models"
         x:Class="ResSim.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="ResSim">
+        mc:Ignorable="d"
+        Title="Meal Processing"
+        Width="500" Height="400"
+        x:DataType="vm:MainWindowViewModel">
 
-    <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-        <vm:MainWindowViewModel/>
-    </Design.DataContext>
+    <!-- Set DataContext for ViewModel -->
+    <!-- <Window.DataContext>
+        <vm:MainWindowViewModel />
+    </Window.DataContext> -->
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-
+    <StackPanel Margin="10">
+        <TextBlock Text="Meal Progress" FontSize="20" Margin="0 0 0 10"/>
+        
+        <ListBox ItemsSource="{Binding RecipesInProgress}">
+            <!-- DataTemplate with x:DataType specified -->
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="local:RecipeProgress">
+                    <StackPanel Orientation="Horizontal" Margin="5">
+                        <TextBlock Text="{Binding RecipeName}" Width="150" TextWrapping="Wrap"/>
+                        <ProgressBar Width="200" Height="20" Minimum="0" Maximum="100"
+                                     Value="{Binding Progress}" ShowProgressText="True"/>
+                        <TextBlock Text="{Binding Status}" Width="100"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </StackPanel>
 </Window>
