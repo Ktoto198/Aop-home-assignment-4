@@ -2,6 +2,7 @@
     x:Class="ResSim.Views.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="clr-namespace:ResSim.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="clr-namespace:ResSim.Models"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -15,45 +16,140 @@
     <!--  Set DataContext for ViewModel  -->
     <!-- <Window.DataContext>
         <vm:MainWindowViewModel />
-    </Window.DataContext>-->
+    </Window.DataContext> -->
 
-    <StackPanel Margin="10">
-        <TextBlock
-            Margin="0,0,0,10"
-            FontSize="20"
-            Text="Meal Progress" />
+    <Window.Resources>
+        <conv:BooleanToColorConverter x:Key="BooleanToColorConverter" />
+        <conv:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
 
-        <ListBox ItemsSource="{Binding RecipesInProgress}">
-            <!--  DataTemplate with x:DataType specified  -->
-            <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="local:RecipeProgress">
-                    <Grid
-                        Margin="5"
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+        <!-- Center the content vertically and horizontally -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10">
+            <!-- Title Text -->
+            <TextBlock
+                Margin="0,0,0,10"
+                FontSize="20"
+                HorizontalAlignment="Center"
+                Text="Meal Progress"
+            />
+
+            <!-- Button to Show Active Orders -->
+            <Button
+                Width="150"
+                Content="Only Active Orders"
+                Height="40"
+                Padding="10,5"
+                Command="{Binding ShowActiveOrdersCommand}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+            />
+
+            <!-- Station Number Section -->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock
+                    Text="{Binding StationNumber}"
+                    HorizontalAlignment="Center"
+                    FontSize="16"
+                    Margin="5"
+                />
+                <Slider
+                    Maximum="{Binding MaxStationNumber}"
+                    Value="{Binding StationNumber}"
+                    x:Name="slider"
+                    HorizontalAlignment="Center"
+                    Width="200"
+                    Margin="5"
+                />
+            </StackPanel>
+
+            <!-- Background and Visibility for Order Completion Status -->
+            <StackPanel
+                Height="50"
+                Margin="20"
+                Background="{Binding AllOrdersCompleted, Converter={StaticResource BooleanToColorConverter}}"
+                HorizontalAlignment="Center"
+            >
+                <Border
+                    MinWidth="300"
+                    Padding="15"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderBrush="DarkGreen"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    IsVisible="{Binding AllOrdersCompleted, Converter={StaticResource BooleanToVisibilityConverter}}"
+                >
+                    <TextBlock
+                        HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        ColumnDefinitions="2*,4*,2*">
-                        <TextBlock
-                            Grid.Column="0"
-                            Text="{Binding RecipeName}"
-                            TextWrapping="Wrap" />
+                        FontSize="18"
+                        FontWeight="Light"
+                        Foreground="DarkGreen"
+                        Text="✅ All orders have been completed!"
+                        TextAlignment="Center"
+                    />
+                </Border>
+            </StackPanel>
 
-                        <ProgressBar
-                            Grid.Column="1"
-                            Height="20"
-                            Margin="5,0"
+            <!-- ListBox for displaying recipes in progress -->
+            <ListBox
+                ItemsSource="{Binding RecipesInProgress}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Width="500"
+                Margin="10"
+            >
+                <!-- DataTemplate for ListBox Item -->
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:RecipeProgress">
+                        <Grid
+                            Margin="5"
                             VerticalAlignment="Center"
-                            Maximum="100"
-                            Minimum="0"
-                            Value="{Binding Progress}"
-                            ShowProgressText="True"
-                             />
+                            HorizontalAlignment="Center"
+                            ColumnDefinitions="2*,4*,2*"
+                        >
+                            <!-- Recipe Name -->
+                            <TextBlock
+                                Grid.Column="0"
+                                Text="{Binding RecipeName}"
+                                TextWrapping="Wrap"
+                                HorizontalAlignment="Center"
+                            />
 
-                        <TextBlock
-                            Grid.Column="2"
-                            HorizontalAlignment="Right"
-                            Text="{Binding Status}" />
-                    </Grid>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-    </StackPanel>
+                            <!-- Progress Bar -->
+                            <ProgressBar
+                                Name="progressBar"
+                                Grid.Column="1"
+                                Height="20"
+                                Margin="5,0"
+                                VerticalAlignment="Center"
+                                Maximum="100"
+                                Minimum="0"
+                                ShowProgressText="True"
+                                Value="{Binding Progress}"
+                                HorizontalAlignment="Center"
+                            >
+                                <ProgressBar.Transitions>
+                                    <!-- Animate the Value property -->
+                                    <Transitions>
+                                        <DoubleTransition Property="Value" Duration="0:0:1" />
+                                    </Transitions>
+                                </ProgressBar.Transitions>
+                            </ProgressBar>
+
+                            <!-- Recipe Status -->
+                            <TextBlock
+                                Grid.Column="2"
+                                HorizontalAlignment="Center"
+                                Text="{Binding Status}"
+                                VerticalAlignment="Center"
+                            />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </StackPanel>
+    </Grid>
 </Window>

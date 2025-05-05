@@ -10,59 +10,157 @@ using System.Collections.Concurrent;
 using System.Linq;
 using Avalonia.Threading;
 using Avalonia.Controls;
+using System.Threading;
 
-namespace ResSim.ViewModels;
-
-public partial class MainWindowViewModel : ViewModelBase
+namespace ResSim.ViewModels
 {
-    public MainWindow MainWindow { get; set; }
-    public static RecipeData? recipeData;
-
-    private readonly MealProcessing _mealProcessing = new MealProcessing();
-
-    RecipeProgress recipeProgress = new RecipeProgress();
-
-    [ObservableProperty]
-    private ObservableCollection<RecipeProgress> recipesInProgress;
-
-    [ObservableProperty]
-    private double _progress = new RecipeProgress().Progress; // Example arguments: 0 completed steps out of 1 total step
-    private Window? mainWindow;
-
-
-    public MainWindowViewModel(MainWindow mainWindow)
+    public partial class MainWindowViewModel : ViewModelBase
     {
-        MainWindow = mainWindow;
-        RecipesInProgress = new ObservableCollection<RecipeProgress>();
-        _mealProcessing = new MealProcessing(RecipesInProgress);
-        Console.WriteLine(recipesInProgress.Count);
+        public MainWindow MainWindow { get; set; }
+        private Window? mainWindow;
+        public static RecipeData? recipeData;
+        private readonly MealProcessing _mealProcessing = new MealProcessing();
+        RecipeProgress recipeProgress = new RecipeProgress();
 
-    }
+        [ObservableProperty]
+        private ObservableCollection<RecipeProgress> recipesInProgress;
 
-    public MainWindowViewModel(Window? mainWindow)
-    {
-        this.mainWindow = mainWindow;
-    }
+        [ObservableProperty]
+        private ObservableCollection<RecipeProgress>? filteredRecipesInProgress;
 
-    public async Task StartMealProcessing(List<Recipe> recipes)
-    {
-        var tasks = new List<Task>();
-        var recipeQueue = new ConcurrentQueue<Recipe>(recipes.OrderBy(_ => Guid.NewGuid())); // Shuffle recipes
+        [ObservableProperty]
+        private double _progress = new RecipeProgress().Progress;
 
-        int stationCount = 2; // Or any number of stations you want
+        [ObservableProperty]
+        private bool allOrdersCompleted;
 
-        for (int i = 0; i < stationCount; i++)
+        [ObservableProperty]
+        private int stationNumber = 1;
+
+        [ObservableProperty]
+        private int maxStationNumber = 6;
+
+        private int _currentRunningStations = 0;
+        private ConcurrentQueue<Recipe> _recipeQueue;
+        private CancellationTokenSource? _cancellationTokenSource;
+        private List<Task> _runningTasks = new List<Task>();
+        private Dictionary<int, CancellationTokenSource> _stationCancellationTokenSources = new Dictionary<int, CancellationTokenSource>();
+
+        public MainWindowViewModel(MainWindow mainWindow)
         {
-            int stationId = i + 1;
-            var stationName = $"Station {stationId}";
+            MainWindow = mainWindow;
+            RecipesInProgress = new ObservableCollection<RecipeProgress>();
+            _mealProcessing = new MealProcessing(RecipesInProgress);
+        }
 
-            tasks.Add(Task.Run(async () =>
+        public MainWindowViewModel(Window? mainWindow)
+        {
+            this.mainWindow = mainWindow;
+        }
+
+        // This method will be called whenever the StationNumber changes
+        partial void OnStationNumberChanged(int value)
+        {
+            if (_recipeQueue == null || _cancellationTokenSource == null)
+                return;
+
+            if (value > _currentRunningStations)
             {
-                while (recipeQueue.TryDequeue(out var recipe))
+                // Add more stations if needed
+                int additionalStations = value - _currentRunningStations;
+                for (int i = 0; i < additionalStations; i++)
                 {
-                    Console.WriteLine($"Processing recipe: {recipe.Name} at {stationName}");
+                    StartStation(_currentRunningStations + 1, _cancellationTokenSource.Token);
+                    _currentRunningStations++;
+                }
+            }
+            // No need to remove stations, only add
+        }
 
-                    // Add the recipe to the UI immediately
+        [RelayCommand]
+        public void ShowActiveOrders()
+        {
+            // Ensure FilteredRecipesInProgress is not null.
+            FilteredRecipesInProgress ??= new ObservableCollection<RecipeProgress>();
+
+            // Filter the active orders and directly assign to FilteredRecipesInProgress.
+            var active = RecipesInProgress.Where(r => r.Status == "In Progress").ToList();
+
+            FilteredRecipesInProgress.Clear();
+            foreach (var recipe in active)
+            {
+                FilteredRecipesInProgress.Add(recipe);
+            }
+
+            // Update RecipesInProgress (if necessary).
+            RecipesInProgress = FilteredRecipesInProgress;
+        }
+
+        private void CheckAllOrdersCompleted()
+        {
+            AllOrdersCompleted = RecipesInProgress.All(r => r.Status == "Completed");
+        }
+
+        // Method to start meal processing
+        public async Task StartMealProcessing(List<Recipe> recipes)
+        {
+            _cancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = _cancellationTokenSource.Token;
+
+            _runningTasks.Clear();
+            _recipeQueue = new ConcurrentQueue<Recipe>(recipes.OrderBy(_ => Guid.NewGuid()));
+
+            int stationCount = StationNumber;
+
+            for (int i = 0; i < stationCount; i++)
+            {
+                StartStation(i + 1, cancellationToken);
+            }
+
+            _currentRunningStations = stationCount;
+
+            try
+            {
+                await Task.WhenAll(_runningTasks);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error or cancellation occurred: {ex.Message}");
+            }
+        }
+
+        private void StartStation(int stationId, CancellationToken cancellationToken)
+        {
+            string stationName = $"Station {stationId}";
+            var cancellationTokenSource = new CancellationTokenSource();
+            _stationCancellationTokenSources[stationId] = cancellationTokenSource;
+
+            var task = Task.Run(async () =>
+            {
+                List<RecipeProgress> recipesBeingProcessed = new List<RecipeProgress>();
+
+                while (_recipeQueue.TryDequeue(out var recipe))
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
+
+                    // Exit if the station is no longer needed due to the number of stations being reduced
+                    if (stationId > StationNumber)
+                    {
+                        // Remove recipes being processed by this station
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            foreach (var progress in recipesBeingProcessed)
+                            {
+                                RecipesInProgress.Remove(progress);  // Remove the recipe from the collection
+                            }
+                        });
+
+                        Console.WriteLine($"{stationName} stopped due to StationNumber decrease and removed its recipes.");
+                        return;  // Stop processing if station number has been reduced
+                    }
+
+                    // Create a new progress object for this recipe
                     var recipeProgress = new RecipeProgress
                     {
                         RecipeName = recipe.Name ?? "Unknown Recipe",
@@ -70,35 +168,47 @@ public partial class MainWindowViewModel : ViewModelBase
                         Progress = 0
                     };
 
+                    // Add recipe progress to the list of recipes in progress
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         RecipesInProgress.Add(recipeProgress);
                     });
 
-                    var kitchenStation = new KitchenStation(stationName, recipe);
+                    recipesBeingProcessed.Add(recipeProgress);  // Track the recipe as being processed by this station
 
+                    // Simulate processing the recipe
+                    var kitchenStation = new KitchenStation(stationName, recipe);
                     await kitchenStation.ProcessMealsAsync(recipe, recipeProgress);
-                    // Update the recipe progress after processing
+
+                    // Update the progress once completed
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         recipeProgress.Status = "Completed";
                         recipeProgress.Progress = 100;
                     });
-
-                    Console.WriteLine($"Finished processing recipe: {recipe.Name} at {stationName}");
                 }
-                Console.WriteLine($"{stationName} has completed all recipes.");
-            }));
+
+                Console.WriteLine($"{stationName} finished processing recipes.");
+            }, cancellationToken);
+
+            // Add the task to the list of running tasks
+            _runningTasks.Add(task);
         }
 
-        try
+        // Method to stop processing
+        public async Task StopProcessing()
         {
-            await Task.WhenAll(tasks);
-            Console.WriteLine("All stations have completed meal processing!");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error occurred while processing meals: {ex.Message}");
+            if (_cancellationTokenSource != null)
+            {
+                // Request cancellation
+                _cancellationTokenSource.Cancel();
+
+                // Wait for all running tasks to complete (cancelled or not)
+                await Task.WhenAll(_runningTasks);
+
+                // Optionally, reset any state after stopping
+                Console.WriteLine("Processing stopped.");
+            }
         }
     }
 }
