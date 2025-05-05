@@ -40,7 +40,11 @@ namespace ResSim.ViewModels
         [ObservableProperty]
         private int maxStationNumber = 6;
 
+        [ObservableProperty]
+        public int simulationSpeed = 1;
+
         private int _currentRunningStations = 0;
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1); // Initialize with a single permit
         private ConcurrentQueue<Recipe> _recipeQueue;
         private CancellationTokenSource? _cancellationTokenSource;
         private List<Task> _runningTasks = new List<Task>();
@@ -74,7 +78,17 @@ namespace ResSim.ViewModels
                     _currentRunningStations++;
                 }
             }
-            // No need to remove stations, only add
+            else if (value < _currentRunningStations)
+            {
+                // Stop the excess stations if the station number decreases
+                int stationsToStop = _currentRunningStations - value;
+                for (int i = 0; i < stationsToStop; i++)
+                {
+                    StopStation(_currentRunningStations - i);
+                }
+                _currentRunningStations = value;
+            }
+            // No need to remove stations, only add or stop them
         }
 
         [RelayCommand]
@@ -96,6 +110,19 @@ namespace ResSim.ViewModels
             RecipesInProgress = FilteredRecipesInProgress;
         }
 
+        [RelayCommand]
+        public void AllOrdersCompletedCommand()
+        {
+            // Check if all orders are completed
+            CheckAllOrdersCompleted();
+
+            // If all orders are completed, show a message
+            if (AllOrdersCompleted)
+            {
+                Console.WriteLine("All orders have been completed.");
+            }
+        }
+
         private void CheckAllOrdersCompleted()
         {
             AllOrdersCompleted = RecipesInProgress.All(r => r.Status == "Completed");
@@ -104,6 +131,12 @@ namespace ResSim.ViewModels
         // Method to start meal processing
         public async Task StartMealProcessing(List<Recipe> recipes)
         {
+            if (_cancellationTokenSource != null)
+            {
+                Console.WriteLine("Meal processing is already running.");
+                return;
+            }
+
             _cancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = _cancellationTokenSource.Token;
 
@@ -128,71 +161,95 @@ namespace ResSim.ViewModels
                 Console.WriteLine($"Error or cancellation occurred: {ex.Message}");
             }
         }
-
         private void StartStation(int stationId, CancellationToken cancellationToken)
         {
             string stationName = $"Station {stationId}";
-            var cancellationTokenSource = new CancellationTokenSource();
-            _stationCancellationTokenSources[stationId] = cancellationTokenSource;
 
             var task = Task.Run(async () =>
             {
                 List<RecipeProgress> recipesBeingProcessed = new List<RecipeProgress>();
 
-                while (_recipeQueue.TryDequeue(out var recipe))
+                try
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                        return;
-
-                    // Exit if the station is no longer needed due to the number of stations being reduced
-                    if (stationId > StationNumber)
+                    while (_recipeQueue.TryDequeue(out var recipe))
                     {
-                        // Remove recipes being processed by this station
+                        // Check for cancellation on each recipe being processed
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            Console.WriteLine($"{stationName} was canceled before starting a new recipe.");
+                            break;
+                        }
+
+                        // If station number is decreased, stop processing
+                        if (stationId > StationNumber)
+                        {
+                            await Dispatcher.UIThread.InvokeAsync(() =>
+                            {
+                                foreach (var progress in recipesBeingProcessed)
+                                {
+                                    RecipesInProgress.Remove(progress);
+                                }
+                            });
+
+                            Console.WriteLine($"{stationName} stopped due to StationNumber decrease.");
+                            break;
+                        }
+
+                        // Create and update progress for this recipe
+                        var recipeProgress = new RecipeProgress
+                        {
+                            RecipeName = recipe.Name ?? "Unknown Recipe",
+                            Status = "In Progress",
+                            Progress = 0
+                        };
+
+                        // Update UI
                         await Dispatcher.UIThread.InvokeAsync(() =>
                         {
-                            foreach (var progress in recipesBeingProcessed)
-                            {
-                                RecipesInProgress.Remove(progress);  // Remove the recipe from the collection
-                            }
+                            RecipesInProgress.Add(recipeProgress);
                         });
 
-                        Console.WriteLine($"{stationName} stopped due to StationNumber decrease and removed its recipes.");
-                        return;  // Stop processing if station number has been reduced
+                        recipesBeingProcessed.Add(recipeProgress);
+
+                        // Simulate processing
+                        var kitchenStation = new KitchenStation(stationName, recipe);
+                        await kitchenStation.ProcessMealsAsync(recipe, recipeProgress, simulationSpeed, cancellationToken);
+
+                        // Update progress after processing is done
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            recipeProgress.Status = "Completed";
+                            recipeProgress.Progress = 100;
+                        });
                     }
 
-                    // Create a new progress object for this recipe
-                    var recipeProgress = new RecipeProgress
-                    {
-                        RecipeName = recipe.Name ?? "Unknown Recipe",
-                        Status = "In Progress",
-                        Progress = 0
-                    };
-
-                    // Add recipe progress to the list of recipes in progress
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        RecipesInProgress.Add(recipeProgress);
-                    });
-
-                    recipesBeingProcessed.Add(recipeProgress);  // Track the recipe as being processed by this station
-
-                    // Simulate processing the recipe
-                    var kitchenStation = new KitchenStation(stationName, recipe);
-                    await kitchenStation.ProcessMealsAsync(recipe, recipeProgress);
-
-                    // Update the progress once completed
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        recipeProgress.Status = "Completed";
-                        recipeProgress.Progress = 100;
-                    });
+                    Console.WriteLine($"{stationName} finished processing recipes.");
                 }
-
-                Console.WriteLine($"{stationName} finished processing recipes.");
+                catch (OperationCanceledException)
+                {
+                    // Handle cancellation exception
+                    Console.WriteLine($"{stationName} was canceled.");
+                }
             }, cancellationToken);
 
-            // Add the task to the list of running tasks
+            // Add task to the running tasks list
             _runningTasks.Add(task);
+        }
+
+        [RelayCommand]
+        public async Task StopProcessingCommand()
+        {
+            await StopProcessing();
+        }
+
+        private void StopStation(int stationId)
+        {
+            if (_stationCancellationTokenSources.TryGetValue(stationId, out var cancellationTokenSource))
+            {
+                cancellationTokenSource.Cancel();
+                _stationCancellationTokenSources.Remove(stationId);
+                Console.WriteLine($"Station {stationId} stopped.");
+            }
         }
 
         // Method to stop processing
@@ -200,15 +257,27 @@ namespace ResSim.ViewModels
         {
             if (_cancellationTokenSource != null)
             {
-                // Request cancellation
                 _cancellationTokenSource.Cancel();
 
-                // Wait for all running tasks to complete (cancelled or not)
-                await Task.WhenAll(_runningTasks);
+                try
+                {
+                    await Task.WhenAll(_runningTasks);
+                }
+                catch (OperationCanceledException)
+                {
+                    Console.WriteLine("Tasks were cancelled.");
+                }
 
-                // Optionally, reset any state after stopping
-                Console.WriteLine("Processing stopped.");
+                _cancellationTokenSource.Dispose();
+                _cancellationTokenSource = null;  // 👈 resets for new start
             }
+
+            _recipeQueue = null;
+            _runningTasks.Clear();
+            _currentRunningStations = 0;
+            AllOrdersCompleted = false;
+
+            Console.WriteLine("Processing stopped and cleaned up.");
         }
     }
 }
